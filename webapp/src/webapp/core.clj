@@ -1,7 +1,9 @@
 (ns webapp.core
   (:require [net.cgrand.enlive-html :as enlive]
             [compojure.core :refer [defroutes GET POST]]
-            [ring.adapter.jetty :as jetty]))
+            [ring.adapter.jetty :as jetty]
+            [compojure.route :refer [resources]]
+            [ring.middleware.params :refer [wrap-params]]))
 
 (defrecord Tweed [title content])
 
@@ -28,9 +30,22 @@
 
 (enlive/deftemplate index-tpl "../resources/tweedler/index.html"
   [tweeds]
-  [:section.tweeds] (enlive/content (map tweed-tpl tweeds)))
+  [:section.tweeds] (enlive/content (map tweed-tpl tweeds))
+  [:form] (enlive/set-attr :method "post" :action "/"))
 
-(defroutes app
-  (GET "/" [] (index-tpl (get-tweeds store))))
+(put-tweed! store (->Tweed "Teste Title 2" "content"))
 
-(def server (jetty/run-jetty app {:port 3000 :join? false}))
+(defn handle-create [{{title "title" content "content"} :params}]
+  (put-tweed! store (->Tweed title content))
+  {:body "" :status 302 :headers {"Location" "/"}})
+
+(defroutes app-routes
+  (GET "/" [] (index-tpl (get-tweeds store)))
+  (POST "/" req (handle-create req))
+  (resources "/css" {:root "tweedler/css"})
+  (resources "/img" {:root "tweedler/img"}))
+
+(def app (-> app-routes
+             (wrap-params)))
+
+(def server (jetty/run-jetty (var app) {:port 7000 :join? false}))
